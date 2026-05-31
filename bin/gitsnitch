@@ -1,0 +1,7 @@
+#!/usr/bin/env bb
+
+(ns gitsnitch.bin
+  (:require [gitsnitch.main :as main]))
+
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply main/-main *command-line-args*))

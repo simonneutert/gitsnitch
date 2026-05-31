@@ -1,0 +1,11 @@
+[tools]
+babashka = { version = "latest", exe = "bb" }
+
+[tasks.dev-install]
+description = "(Re-)Install gitsnitch using bbin"
+depends = ["uninstall"]
+run = "bbin install . --force"
+
+[tasks.uninstall]
+description = "Uninstall gitsnitch using bbin"
+run = "bbin uninstall gitsnitch"
