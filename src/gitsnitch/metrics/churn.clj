@@ -1,5 +1,6 @@
 (ns gitsnitch.metrics.churn
   (:require [gitsnitch.filters :as filters]
+            [gitsnitch.util :as util]
             [clojure.string :as str]))
 
 (defn- parent-dir
@@ -20,25 +21,42 @@
   {:total-commits 0 :files {}})
 
 (defn accumulate-step
-  "Accumulate one commit into file-churn state."
-  [acc commit]
-  (let [date  (:commit/author-date commit)
-        files (map (fn [f] {:path f}) (:commit/files commit))
-        total-commits (inc (:total-commits acc))]
-    (reduce
-     (fn [acc2 file-info]
-       (let [path (:path file-info)]
-         (update-in acc2 [:files path]
-                    (fn [cur]
-                      (let [cur (or cur {:changes 0 :last-changed nil})]
-                        (-> cur
-                            (update :changes inc)
-                            (update :last-changed
-                                    (fn [old]
-                                      (if (or (nil? old) (and date (pos? (compare date old))))
-                                        date old)))))))))
-     (assoc acc :total-commits total-commits)
-     files)))
+  "Accumulate one commit into file-churn state.
+   With opts, applies the same :path/:exclude filtering and :detailed?
+   numstat tracking as file-churn. Without opts (used by summary's
+   single-pass reduce), every file is counted unfiltered."
+  ([acc commit] (accumulate-step acc commit nil))
+  ([acc commit opts]
+   (let [keep? (if opts
+                 (fn [path]
+                   (and ((filters/path-filter (:path opts)) path)
+                        ((filters/exclude-filter (:exclude opts)) path)))
+                 (constantly true))
+         date  (:commit/author-date commit)
+         files (if (:detailed? opts)
+                 (:commit/numstat commit)
+                 (map (fn [f] {:path f}) (:commit/files commit)))
+         total-commits (inc (:total-commits acc))]
+     (reduce
+      (fn [acc2 file-info]
+        (let [path (:path file-info)]
+          (if (keep? path)
+            (update-in acc2 [:files path]
+                       (fn [cur]
+                         (let [cur (or cur {:changes 0 :last-changed nil
+                                            :insertions 0 :deletions 0})]
+                           (cond-> (-> cur
+                                       (update :changes inc)
+                                       (update :last-changed
+                                               (fn [old]
+                                                 (if (or (nil? old) (and date (pos? (compare date old))))
+                                                   date old))))
+                             (:detailed? opts)
+                             (-> (update :insertions + (or (:insertions file-info) 0))
+                                 (update :deletions + (or (:deletions file-info) 0)))))))
+            acc2)))
+      (assoc acc :total-commits total-commits)
+      files))))
 
 (defn finalize-churn
   "Finalize accumulated state into the standard churn result map."
@@ -50,10 +68,7 @@
                 (map (fn [[path stats]]
                        {:path         path
                         :changes      (:changes stats)
-                        :percent      (if (pos? total)
-                                        (Double/parseDouble
-                                         (format "%.1f" (* 100.0 (/ (:changes stats) total))))
-                                        0.0)
+                        :percent      (util/pct (:changes stats) total)
                         :last-changed (:last-changed stats)}))
                 (sort-by (juxt (comp - :changes) :path))
                 vec)}))
@@ -65,49 +80,15 @@
      :path      - coll of path prefixes to include
      :detailed? - if true, expects :commit/numstat on commits"
   [commits opts]
-  (let [keep? (fn [path]
-                (and ((filters/path-filter (:path opts)) path)
-                     ((filters/exclude-filter (:exclude opts)) path)))
-        result (reduce
-                (fn [acc commit]
-                  (let [date  (:commit/author-date commit)
-                        files (if (:detailed? opts)
-                                (:commit/numstat commit)
-                                (map (fn [f] {:path f}) (:commit/files commit)))
-                        total-commits (inc (:total-commits acc))]
-                    (reduce
-                     (fn [acc2 file-info]
-                       (let [path (:path file-info)]
-                         (if (keep? path)
-                           (update-in acc2 [:files path]
-                                      (fn [cur]
-                                        (let [cur (or cur {:changes 0 :last-changed nil
-                                                           :insertions 0 :deletions 0})]
-                                          (cond-> (-> cur
-                                                      (update :changes inc)
-                                                      (update :last-changed
-                                                              (fn [old]
-                                                                (if (or (nil? old) (and date (pos? (compare date old))))
-                                                                  date old))))
-                                            (:detailed? opts)
-                                            (-> (update :insertions + (or (:insertions file-info) 0))
-                                                (update :deletions + (or (:deletions file-info) 0)))))))
-                           acc2)))
-                     (assoc acc :total-commits total-commits)
-                     files)))
-                {:total-commits 0 :files {}}
-                commits)
-        total (:total-commits result)]
+  (let [result (reduce #(accumulate-step %1 %2 opts) (init-acc) commits)
+        total  (:total-commits result)]
     {:total-commits total
      :total-files   (count (:files result))
      :rows (->> (:files result)
                 (map (fn [[path stats]]
                        (cond-> {:path         path
                                 :changes      (:changes stats)
-                                :percent      (if (pos? total)
-                                                (Double/parseDouble
-                                                 (format "%.1f" (* 100.0 (/ (:changes stats) total))))
-                                                0.0)
+                                :percent      (util/pct (:changes stats) total)
                                 :last-changed (:last-changed stats)}
                          (:detailed? opts)
                          (assoc :insertions (:insertions stats)
@@ -157,10 +138,7 @@
                        {:dir          dir
                         :changes      (:commit-count stats)
                         :file-count   (count (:file-paths stats))
-                        :percent      (if (pos? total)
-                                        (Double/parseDouble
-                                         (format "%.1f" (* 100.0 (/ (:commit-count stats) total))))
-                                        0.0)
+                        :percent      (util/pct (:commit-count stats) total)
                         :last-changed (:last-changed stats)}))
                 (sort-by (juxt (comp - :changes) :dir))
                 vec)}))

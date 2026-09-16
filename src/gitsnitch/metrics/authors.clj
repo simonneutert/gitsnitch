@@ -1,6 +1,7 @@
 (ns gitsnitch.metrics.authors
   (:require [clojure.string :as str]
-            [gitsnitch.filters :as filters]))
+            [gitsnitch.filters :as filters]
+            [gitsnitch.util :as util]))
 
 ;; ---------------------------------------------------------------------------
 ;; Accumulator API for single-pass summary
@@ -22,25 +23,22 @@
         (update :total inc)
         (update-in [:authors email]
                    (fn [cur]
-                     (let [cur (or cur {:commits 0
-                                        :name name
-                                        :first-seen date
-                                        :last-seen date})]
+                     (let [cur    (or cur {:commits 0
+                                           :name name
+                                           :first-seen date
+                                           :last-seen date})
+                           newer? (and date (:last-seen cur)
+                                       (not (neg? (compare date (:last-seen cur)))))]
                        (-> cur
                            (update :commits inc)
                            (update :first-seen
                                    (fn [old]
                                      (if (and old date (neg? (compare old date)))
                                        old date)))
-                           (update :last-seen
-                                   (fn [old]
-                                     (if (and old date (pos? (compare old date)))
-                                       old date)))
-                           ;; Update name to most recent
+                           ;; A newer-or-equal commit updates :last-seen and :name together,
+                           ;; so the two can never drift out of agreement.
                            (cond->
-                            (and date (:last-seen cur)
-                                 (not (neg? (compare date (:last-seen cur)))))
-                             (assoc :name name)))))))))
+                            newer? (assoc :last-seen date :name name)))))))))
 
 (def accumulate-step step-author)
 
@@ -54,10 +52,7 @@
                 (map (fn [[_email stats]]
                        {:author     (:name stats)
                         :commits    (:commits stats)
-                        :percent    (if (pos? total)
-                                      (Double/parseDouble
-                                       (format "%.1f" (* 100.0 (/ (:commits stats) total))))
-                                      0.0)
+                        :percent    (util/pct (:commits stats) total)
                         :first-seen (:first-seen stats)
                         :last-seen  (:last-seen stats)}))
                 (sort-by (comp - :commits))

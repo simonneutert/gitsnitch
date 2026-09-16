@@ -243,17 +243,3 @@
                    :title "Recent danger commits")))
 
     (str sb)))
-
-;; Summary table
-
-(defn print-table
-  "Render and print a table."
-  [columns rows & opts]
-  (print (apply render-table columns rows opts)))
-
-(defn summary-section [label rows]
-  (let [sb (StringBuilder.)]
-    (.append sb (str "\n" label "\n"))
-    (doseq [row rows]
-      (.append sb (str "  " row "\n")))
-    (str sb)))

@@ -2,8 +2,7 @@
  :min-bb-version "1.3.177"
  :bbin/bin {gitsnitch {:main-opts ["-m" "gitsnitch.main"]}}
  :deps
- {org.babashka/cli {:mvn/version "0.8.66"}
-  org.clojure/data.csv {:mvn/version "1.1.0"}}
+ {org.babashka/cli {:mvn/version "0.12.91"}}
  :tasks
  {:requires ([gitsnitch.main :as main])
   snitch {:doc "Run gitsnitch"
@@ -21,4 +20,18 @@
   bugs      {:doc "Run bugs report"
              :task (apply main/-main "bugs" *command-line-args*)}
   danger    {:doc "Run danger report"
-             :task (apply main/-main "danger" *command-line-args*)}}}
+             :task (apply main/-main "danger" *command-line-args*)}
+
+  test
+  {:doc "Run unit + synthetic-repo integration tests (fast, offline)"
+   :task (shell "bb" "-cp" "src:test" "test/runner.clj"
+                "test/gitsnitch/unit" "test/gitsnitch/integration")}
+
+  test:integration
+  {:doc "Run the babashka-clone smoke suite (slow, needs network on first run)"
+   :task (shell "bb" "-cp" "src:test" "test/runner.clj" "test/gitsnitch/smoke")}
+
+  test:integration:refresh
+  {:doc "Force re-clone the cached babashka repo used by test:integration"
+   :task (shell "bb" "-cp" "src:test"
+                "-e" "(require '[gitsnitch.cache :as cache]) (cache/refresh!)")}}}

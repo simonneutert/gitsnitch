@@ -24,9 +24,6 @@
                   :default true}
    :first-parent {:desc "Follow only first parent of merges"
                   :coerce :boolean}
-   :verbose {:desc "Verbose output"
-             :coerce :boolean
-             :alias :v}
    :help    {:desc "Show help"
              :coerce :boolean
              :alias :h}})
@@ -59,7 +56,9 @@
 (def bugs-spec
   (merge global-spec
          {:grep {:desc "Regex pattern for bug-related keywords"
-                 :default "fix|bug|broken|defect|issue|repair|patch"}}))
+                 :default "fix|bug|broken|defect|issue|repair|patch"}
+          :exclude {:desc "Glob pattern to exclude (repeatable)"
+                    :coerce []}}))
 
 (def danger-spec
   (merge global-spec

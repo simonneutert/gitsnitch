@@ -1,5 +1,6 @@
 (ns gitsnitch.metrics.coupling
-  (:require [gitsnitch.filters :as filters]))
+  (:require [gitsnitch.filters :as filters]
+            [gitsnitch.util :as util]))
 
 (defn- file-pairs
   "Generate all unordered pairs from a collection of file paths.
@@ -20,7 +21,6 @@
      :exclude            - coll of glob patterns to exclude
      :max-files-per-commit - skip commits touching more than N files (default: 50)
      :min-cochanges      - minimum co-change count to include in results (default: 2)
-     :no-merges          - already handled upstream, but re-checked here for safety
 
    Returns:
      {:total-commits n
@@ -70,18 +70,9 @@
                          {:file-a        a
                           :file-b        b
                           :cochanges     cnt
-                          :support       (if (pos? union)
-                                           (Double/parseDouble
-                                            (format "%.2f" (* 100.0 (/ cnt union))))
-                                           0.0)
-                          :confidence-ab (if (pos? count-a)
-                                           (Double/parseDouble
-                                            (format "%.0f" (* 100.0 (/ cnt count-a))))
-                                           0.0)
-                          :confidence-ba (if (pos? count-b)
-                                           (Double/parseDouble
-                                            (format "%.0f" (* 100.0 (/ cnt count-b))))
-                                           0.0)
+                          :support       (util/pct cnt union "%.2f")
+                          :confidence-ab (util/pct cnt count-a "%.0f")
+                          :confidence-ba (util/pct cnt count-b "%.0f")
                           :jaccard       (if (pos? union)
                                            (Double/parseDouble
                                             (format "%.2f" (double (/ cnt union))))
