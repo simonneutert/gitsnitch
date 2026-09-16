@@ -34,12 +34,3 @@
     (let [pred (path-filter path-prefixes)]
       (filter #(some pred (:commit/files %)) commits))
     commits))
-
-(comment
-  ;; not used yet, but could be useful for future optimizations
-  (defn filter-files
-    "Filter commit files by path prefixes and exclude patterns."
-    [files {:keys [path exclude]}]
-    (let [keep-path? (path-filter path)
-          keep-excl? (exclude-filter exclude)]
-      (filterv #(and (keep-path? %) (keep-excl? %)) files))))

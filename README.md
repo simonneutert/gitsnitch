@@ -1,10 +1,12 @@
 # gitsnitch
 
-A Babashka CLI for mining Git repositories. Surfaces churn hotspots, contribution concentration, commit activity, file coupling, and risky commit patterns without a database.
+A Babashka CLI for mining Git repositories. Surfaces churn hotspots,
+contribution concentration, commit activity, file coupling, and risky commit
+patterns without a database.
 
 <div align="center">
-  
-  <img src="logo.png" alt="Gitsnitch Logo" width="50%" style="max-width:300px">
+
+<img src="logo.png" alt="Gitsnitch Logo" width="50%" style="max-width:300px">
 
 </div>
 
@@ -20,7 +22,9 @@ A Babashka CLI for mining Git repositories. Surfaces churn hotspots, contributio
 ```sh
 git clone https://github.com/simonneutert/gitsnitch
 cd gitsnitch
-chmod +x bin/gitsnitch
+# bin/gitsnitch is executable in git; if it isn't after cloning
+# (some download methods, e.g. GitHub zip downloads, drop the bit),
+# run: chmod +x bin/gitsnitch
 # Optionally symlink to a directory on your PATH
 ln -s "$PWD/bin/gitsnitch" /usr/local/bin/gitsnitch
 ```
@@ -33,7 +37,9 @@ If you have [bbin](https://github.com/babashka/bbin) installed:
 bbin install io.github.simonneutert/gitsnitch
 ```
 
-This installs a `gitsnitch` binary to `~/.local/bin` (ensure that directory is on your `PATH`). The `:bbin/bin` entry in `bb.edn` configures the binary name and entry point automatically — no extra flags needed.
+This installs a `gitsnitch` binary to `~/.local/bin` (ensure that directory is
+on your `PATH`). The `:bbin/bin` entry in `bb.edn` configures the binary name
+and entry point automatically — no extra flags needed.
 
 ## Usage
 
@@ -114,11 +120,13 @@ Commits whose messages match bug-related keywords, ranked by file impact.
 
 ```sh
 gitsnitch bugs --grep "fix|bug|broken|defect"
+gitsnitch bugs --exclude "*.lock"
 ```
 
-| Flag     | Description                                                                        |
-| -------- | ---------------------------------------------------------------------------------- |
-| `--grep` | Regex for bug keywords (default: `fix\|bug\|broken\|defect\|issue\|repair\|patch`) |
+| Flag        | Description                                                                        |
+| ----------- | ---------------------------------------------------------------------------------- |
+| `--grep`    | Regex for bug keywords (default: `fix\|bug\|broken\|defect\|issue\|repair\|patch`) |
+| `--exclude` | Glob pattern to exclude (repeatable)                                               |
 
 ### `danger`
 
@@ -138,14 +146,13 @@ gitsnitch danger --since 6.months.ago
 | ---------------- | ----- | -------------------------------------------------------------- |
 | `--rev`          | `-r`  | Git revision or range                                          |
 | `--since`        |       | Lower bound on author date (e.g. `3.months.ago`, `2026-01-01`) |
-| `--until`        |       | Upper bound on author date (e.g. `1.week.ago`, `2026-04-01`)  |
+| `--until`        |       | Upper bound on author date (e.g. `1.week.ago`, `2026-04-01`)   |
 | `--path`         | `-p`  | Limit to files under this path prefix (repeatable)             |
 | `--top`          |       | Number of results to show (default: 20)                        |
 | `--limit`        | `-l`  | Maximum number of commits to process                           |
 | `--format`       | `-f`  | Output format: `table`, `json`, `edn` (default: `table`)       |
 | `--no-merges`    |       | Exclude merge commits (default: true)                          |
 | `--first-parent` |       | Follow only first parent of merges                             |
-| `--verbose`      | `-v`  | Verbose output                                                 |
 | `--help`         | `-h`  | Show help                                                      |
 
 ### Date arguments
@@ -179,3 +186,6 @@ bb coupling --min-cochanges 3
 bb bugs
 bb danger
 ```
+
+See [DEVELOP.md](DEVELOP.md) for running the test suite (`bb test` /
+`bb test:integration`) and other development notes.

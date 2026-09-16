@@ -1,5 +1,6 @@
 (ns gitsnitch.metrics.bugs
   (:require [gitsnitch.filters :as filters]
+            [gitsnitch.util :as util]
             [clojure.string :as str]))
 
 (defn- bug-match?
@@ -53,10 +54,7 @@
                 (map (fn [[path stats]]
                        {:path        path
                         :bug-changes (:bug-changes stats)
-                        :percent     (if (pos? bug-total)
-                                       (Double/parseDouble
-                                        (format "%.1f" (* 100.0 (/ (:bug-changes stats) bug-total))))
-                                       0.0)
+                        :percent     (util/pct (:bug-changes stats) bug-total)
                         :last-bug    (:last-bug stats)}))
                 (sort-by (juxt (comp - :bug-changes) :path))
                 vec)}))

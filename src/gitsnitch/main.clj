@@ -25,56 +25,65 @@
       (progress/wrap-progress commits total))
     commits))
 
-(defn- run-churn [{:keys [opts]}]
+(defn- run-report
+  "Shared skeleton for the single-metric report commands: stream commits
+   (with a progress bar for table output), compute a data map, then print it
+   as json, edn, or a table.
+   Options:
+     :command      - command name string, used as-is for json and keyworded for edn
+     :compute-fn   - (fn [commits opts]) -> data map
+     :stream-fn    - (fn [opts]) -> commit seq (default git/stream-commits)
+     :extra-fn     - (fn [data]) -> map of extra keys folded into json/edn output
+                     and passed to render-table (default: none)
+     :render-table - (fn [data extra opts]) -> prints the table output"
+  [{:keys [opts]} {:keys [command compute-fn stream-fn extra-fn render-table]
+                   :or   {stream-fn git/stream-commits
+                          extra-fn  (constantly {})}}]
   (try
-    (let [detailed? (:detailed opts)
-          commits   (with-progress
-                      (if detailed?
-                        (git/stream-commits-detailed opts)
-                        (git/stream-commits opts))
-                      opts)
-          by        (or (:by opts) "file")
-          data      (if (= by "dir")
-                      (churn/dir-churn commits opts)
-                      (churn/file-churn commits (assoc opts :detailed? detailed?)))
-          fmt       (or (:format opts) "table")]
-      (case fmt
-        "json" (json/print-json (assoc data :command "churn" :by by))
-        "edn"  (prn (assoc data :command :churn :by (keyword by)))
-        (if (= by "dir")
-          (print (table/dir-churn-table data opts))
-          (print (table/churn-table data (assoc opts :detailed? detailed?))))))
-    (finally
-      (when (show-progress? opts) (progress/finish-progress!)))))
-
-(defn- run-authors [{:keys [opts]}]
-  (try
-    (let [commits  (with-progress (git/stream-commits opts) opts)
-          data     (authors/author-stats commits opts)
-          warnings (authors/concentration-warnings (:rows data) (:total-commits data))
-          fmt      (or (:format opts) "table")]
-      (case fmt
-        "json" (json/print-json (assoc data :command "authors" :warnings warnings))
-        "edn"  (prn (assoc data :command :authors :warnings warnings))
-        (do
-          (print (table/authors-table data opts))
-          (doseq [w warnings]
-            (println (str "⚠ " (:message w)))))))
-    (finally
-      (when (show-progress? opts) (progress/finish-progress!)))))
-
-(defn- run-activity [{:keys [opts]}]
-  (try
-    (let [commits (with-progress (git/stream-commits opts) opts)
-          data    (activity/activity-buckets commits opts)
-          trend   (activity/trend-summary (:rows data))
+    (let [commits (with-progress (stream-fn opts) opts)
+          data    (compute-fn commits opts)
+          extra   (extra-fn data)
           fmt     (or (:format opts) "table")]
       (case fmt
-        "json" (json/print-json (assoc data :command "activity" :trend trend))
-        "edn"  (prn (assoc data :command :activity :trend trend))
-        (print (table/activity-table data {:trend trend}))))
+        "json" (json/print-json (merge data extra {:command command}))
+        "edn"  (prn (merge data extra {:command (keyword command)}))
+        (render-table data extra opts)))
     (finally
       (when (show-progress? opts) (progress/finish-progress!)))))
+
+(defn- run-churn [{:keys [opts] :as ctx}]
+  (let [detailed? (:detailed opts)
+        by        (or (:by opts) "file")
+        dir?      (= by "dir")]
+    (run-report ctx
+                {:command      "churn"
+                 :stream-fn    (if detailed? git/stream-commits-detailed git/stream-commits)
+                 :compute-fn   (if dir?
+                                 churn/dir-churn
+                                 (fn [commits opts] (churn/file-churn commits (assoc opts :detailed? detailed?))))
+                 :extra-fn     (constantly {:by by})
+                 :render-table (fn [data _extra opts]
+                                 (if dir?
+                                   (print (table/dir-churn-table data opts))
+                                   (print (table/churn-table data (assoc opts :detailed? detailed?)))))})))
+
+(defn- run-authors [ctx]
+  (run-report ctx
+              {:command      "authors"
+               :compute-fn   authors/author-stats
+               :extra-fn     (fn [data]
+                               {:warnings (authors/concentration-warnings (:rows data) (:total-commits data))})
+               :render-table (fn [data extra opts]
+                               (print (table/authors-table data opts))
+                               (doseq [w (:warnings extra)]
+                                 (println (str "⚠ " (:message w)))))}))
+
+(defn- run-activity [ctx]
+  (run-report ctx
+              {:command      "activity"
+               :compute-fn   activity/activity-buckets
+               :extra-fn     (fn [data] {:trend (activity/trend-summary (:rows data))})
+               :render-table (fn [data extra _opts] (print (table/activity-table data extra)))}))
 
 (defn- run-summary [{:keys [opts]}]
   ;; Single-pass: compute churn + authors + activity in one reduce over the stream
@@ -85,7 +94,7 @@
           result    (reduce
                      (fn [acc commit]
                        (-> acc
-                           (update :churn-acc   churn/accumulate-step commit)
+                           (update :churn-acc   churn/accumulate-step commit opts)
                            (update :author-acc  authors/accumulate-step commit)
                            (update :activity-acc activity/accumulate-step commit)
                            (update :total inc)
@@ -143,41 +152,23 @@
     (finally
       (when (show-progress? opts) (progress/finish-progress!)))))
 
-(defn- run-bugs [{:keys [opts]}]
-  (try
-    (let [commits (with-progress (git/stream-commits opts) opts)
-          data    (bugs/bug-hotspots commits opts)
-          fmt     (or (:format opts) "table")]
-      (case fmt
-        "json" (json/print-json (assoc data :command "bugs"))
-        "edn"  (prn (assoc data :command :bugs))
-        (print (table/bugs-table data opts))))
-    (finally
-      (when (show-progress? opts) (progress/finish-progress!)))))
+(defn- run-bugs [ctx]
+  (run-report ctx
+              {:command      "bugs"
+               :compute-fn   bugs/bug-hotspots
+               :render-table (fn [data _extra opts] (print (table/bugs-table data opts)))}))
 
-(defn- run-danger [{:keys [opts]}]
-  (try
-    (let [commits (with-progress (git/stream-commits opts) opts)
-          data    (danger/danger-stats commits opts)
-          fmt     (or (:format opts) "table")]
-      (case fmt
-        "json" (json/print-json (assoc data :command "danger"))
-        "edn"  (prn (assoc data :command :danger))
-        (print (table/danger-table data opts))))
-    (finally
-      (when (show-progress? opts) (progress/finish-progress!)))))
+(defn- run-danger [ctx]
+  (run-report ctx
+              {:command      "danger"
+               :compute-fn   danger/danger-stats
+               :render-table (fn [data _extra opts] (print (table/danger-table data opts)))}))
 
-(defn- run-coupling [{:keys [opts]}]
-  (try
-    (let [commits (with-progress (git/stream-commits opts) opts)
-          data    (coupling/coupling-stats commits opts)
-          fmt     (or (:format opts) "table")]
-      (case fmt
-        "json" (json/print-json (assoc data :command "coupling"))
-        "edn"  (prn (assoc data :command :coupling))
-        (print (table/coupling-table data opts))))
-    (finally
-      (when (show-progress? opts) (progress/finish-progress!)))))
+(defn- run-coupling [ctx]
+  (run-report ctx
+              {:command      "coupling"
+               :compute-fn   coupling/coupling-stats
+               :render-table (fn [data _extra opts] (print (table/coupling-table data opts)))}))
 
 (defn -main [& args]
   (let [parsed (cli/parse-args args)]

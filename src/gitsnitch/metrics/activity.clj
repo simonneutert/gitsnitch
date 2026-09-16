@@ -1,5 +1,6 @@
 (ns gitsnitch.metrics.activity
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [gitsnitch.filters :as filters]))
 
 (defn- date->bucket
   "Extract a time bucket from an ISO date string."
@@ -50,9 +51,11 @@
 
 (defn activity-buckets
   "Reduce commits into time-bucketed activity counts.
+   When :path is set, only commits touching at least one matching file are counted.
    Returns {:total-commits n :rows [{:period :commits}]}"
-  [commits {:keys [by] :or {by "month"}}]
-  (finalize-activity (reduce accumulate-step (init-acc by) commits)))
+  [commits {:keys [by path] :or {by "month"}}]
+  (let [commits (filters/filter-commits-by-path commits path)]
+    (finalize-activity (reduce accumulate-step (init-acc by) commits))))
 
 (defn trend-summary
   "Simple trend detection: compare first half vs second half of activity."
