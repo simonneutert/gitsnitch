@@ -15,6 +15,21 @@
     (testing "non-matching paths are kept"
       (is (true? (keep? "src/core.clj"))))))
 
+(deftest exclude-filter-slash-free-pattern-crosses-directories
+  (testing "a bare glob with no / matches the basename anywhere in the tree, gitignore-style"
+    (let [keep? (filters/exclude-filter ["*.lock"])]
+      (is (false? (keep? "package.lock")))
+      (is (false? (keep? "vendor/foo.lock")))
+      (is (false? (keep? "deeply/nested/dir/bar.lock")))
+      (is (true? (keep? "src/core.clj"))))))
+
+(deftest exclude-filter-scoped-pattern-stays-scoped
+  (testing "a pattern containing / only matches that exact relative path, not any nested occurrence"
+    (let [keep? (filters/exclude-filter ["vendor/*"])]
+      (is (false? (keep? "vendor/foo.clj")))
+      (is (true? (keep? "src/vendor/foo.clj")))
+      (is (true? (keep? "vendor/nested/foo.clj"))))))
+
 (deftest path-filter-prefix-matching
   (let [keep? (filters/path-filter ["src/"])]
     (is (true? (keep? "src/core.clj")))

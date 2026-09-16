@@ -10,13 +10,27 @@
 (defn exclude-filter
   "Returns a predicate that returns true if a path should be KEPT
    (i.e., does NOT match any exclude pattern).
-   Glob matchers are compiled once when the filter is created."
+   Glob matchers are compiled once when the filter is created.
+
+   A pattern with no `/` (e.g. \"*.lock\") matches the path's basename
+   anywhere in the tree, gitignore-style — a bare `*` never crosses a `/`
+   under java.nio.file's glob semantics, so without this a pattern like
+   \"*.lock\" would silently only match root-level files. A pattern
+   containing `/` (e.g. \"vendor/*\") keeps matching the full relative path,
+   scoped exactly as written."
   [exclude-patterns]
   (if (seq exclude-patterns)
-    (let [matchers (mapv glob-matcher exclude-patterns)]
+    (let [matchers (mapv (fn [pattern]
+                           {:scoped? (str/includes? pattern "/")
+                            :matcher (glob-matcher pattern)})
+                         exclude-patterns)]
       (fn [path]
-        (let [p (java.nio.file.Path/of path (into-array String []))]
-          (not (some #(.matches ^java.nio.file.PathMatcher % p) matchers)))))
+        (let [full (java.nio.file.Path/of path (into-array String []))
+              base (.getFileName full)]
+          (not (some (fn [{:keys [scoped? matcher]}]
+                       (.matches ^java.nio.file.PathMatcher matcher
+                                 (if scoped? full base)))
+                     matchers)))))
     (constantly true)))
 
 (defn path-filter
