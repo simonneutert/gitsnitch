@@ -5,8 +5,10 @@
  {org.babashka/cli {:mvn/version "0.12.91"}}
  :tasks
  {:requires ([gitsnitch.main :as main])
-  snitch {:doc "Run gitsnitch"
-          :task (apply main/-main *command-line-args*)}
+  fmt       {:doc "Run cljfmt on the relevant source files"
+             :task (shell "cljfmt" "fix" "src" "test" "bb.edn" "deps.edn")}
+  snitch    {:doc "Run gitsnitch"
+             :task (apply main/-main *command-line-args*)}
   churn     {:doc "Run churn report"
              :task (apply main/-main "churn" *command-line-args*)}
   summary   {:doc "Run summary report"
