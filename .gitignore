@@ -1,5 +1,6 @@
 # visual code
 /*.vsix
+.claude
 # .vscode/settings.json
 .vscode-test
 .lh
@@ -57,6 +58,8 @@ repl-output-ui/js
 # This and that
 .nrepl-port
 dist/
+!test-data/**/dist/
+!test-fixtures/**/dist/
 pom.xml
 .idea
 *.iml
@@ -84,21 +87,17 @@ report.*
 #Calva
 output.calva-repl
 **/.calva/repl.calva-repl
-
+**/.calva/mcp-server/port
 
 # MkDocs
 /site/
 .cache/
 
 # Calva dev
-clojure.tmLanguage.json
 .cpcache/
 backup/
 bundled/drams-menu/drams-local.edn
-
-# Calva grammars (running the atom-ci docker image locally)
-src/calva-fmt/atom-language-clojure/.cache/
-src/calva-fmt/atom-language-clojure/.bash_history
+ephemeral-docs/
 
 # Leiningen
 .lein-repl-history
@@ -111,3 +110,6 @@ src/calva-fmt/atom-language-clojure/.bash_history
 
 **/.cljs_node_repl/
 .venv-docs/
+
+
+**/.eca/config.json
