@@ -155,6 +155,13 @@ gitsnitch danger --since 6.months.ago
 | `--first-parent` |       | Follow only first parent of merges                             |
 | `--help`         | `-h`  | Show help                                                      |
 
+### Exclude pattern matching
+
+`--exclude` patterns with no `/` (e.g. `*.lock`) match the file's basename
+anywhere in the tree, gitignore-style — `--exclude "*.lock"` excludes every
+`*.lock` file, not just root-level ones. A pattern containing `/` (e.g.
+`vendor/*`) matches only that exact relative path.
+
 ### Date arguments
 
 `--since` and `--until` are passed directly to `git log` without transformation,
