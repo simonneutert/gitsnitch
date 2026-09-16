@@ -35,14 +35,25 @@
      :stream-fn    - (fn [opts]) -> commit seq (default git/stream-commits)
      :extra-fn     - (fn [data]) -> map of extra keys folded into json/edn output
                      and passed to render-table (default: none)
-     :render-table - (fn [data extra opts]) -> prints the table output"
-  [{:keys [opts]} {:keys [command compute-fn stream-fn extra-fn render-table]
+     :render-table - (fn [data extra opts]) -> prints the table output
+     :cap-rows?    - when true, limit the displayed/exported :rows to --top
+                     consistently across every output format (default: false,
+                     for reports like activity where :rows isn't a ranked
+                     list to truncate). extra-fn still sees the full,
+                     uncapped data — so e.g. authors' bus-factor warnings
+                     are computed from every author, not just the ones
+                     --top happens to show."
+  [{:keys [opts]} {:keys [command compute-fn stream-fn extra-fn render-table cap-rows?]
                    :or   {stream-fn git/stream-commits
-                          extra-fn  (constantly {})}}]
+                          extra-fn  (constantly {})
+                          cap-rows? false}}]
   (try
     (let [commits (with-progress (stream-fn opts) opts)
-          data    (compute-fn commits opts)
-          extra   (extra-fn data)
+          data0   (compute-fn commits opts)
+          extra   (extra-fn data0)
+          data    (if (and cap-rows? (:rows data0))
+                    (update data0 :rows #(vec (take (or (:top opts) 20) %)))
+                    data0)
           fmt     (or (:format opts) "table")]
       (case fmt
         "json" (json/print-json (merge data extra {:command command}))
@@ -62,6 +73,7 @@
                                  churn/dir-churn
                                  (fn [commits opts] (churn/file-churn commits (assoc opts :detailed? detailed?))))
                  :extra-fn     (constantly {:by by})
+                 :cap-rows?    true
                  :render-table (fn [data _extra opts]
                                  (if dir?
                                    (print (table/dir-churn-table data opts))
@@ -73,6 +85,7 @@
                :compute-fn   authors/author-stats
                :extra-fn     (fn [data]
                                {:warnings (authors/concentration-warnings (:rows data) (:total-commits data))})
+               :cap-rows?    true
                :render-table (fn [data extra opts]
                                (print (table/authors-table data opts))
                                (doseq [w (:warnings extra)]
@@ -156,6 +169,7 @@
   (run-report ctx
               {:command      "bugs"
                :compute-fn   bugs/bug-hotspots
+               :cap-rows?    true
                :render-table (fn [data _extra opts] (print (table/bugs-table data opts)))}))
 
 (defn- run-danger [ctx]
@@ -168,6 +182,7 @@
   (run-report ctx
               {:command      "coupling"
                :compute-fn   coupling/coupling-stats
+               :cap-rows?    true
                :render-table (fn [data _extra opts] (print (table/coupling-table data opts)))}))
 
 (defn -main [& args]

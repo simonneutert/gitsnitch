@@ -67,10 +67,9 @@ subprocess with its working directory set to the target repo
 
 ### A couple of behaviors worth knowing before writing new tests
 
-- `--top` only limits the rendered **table** for `churn`/`authors`/`bugs`/
-  `coupling` — `--format json`/`edn` return every row regardless. `summary` and
-  `danger` apply `--top`/default limits at the data layer, so all three formats
-  are limited there.
-- `--exclude`/`--path` globs use `java.nio.file`'s `PathMatcher` semantics: a
-  bare `*` does not cross a `/` — excluding nested files needs `**` (e.g.
-  `--exclude "**.lock"`), not `*.lock`.
+- `--top` is applied consistently across every output format — `table`, `json`,
+  and `edn` all show the same row cap for every command that supports it
+  (`activity`'s rows are time buckets, not a ranked list, so it's exempt).
+- `--exclude` patterns with no `/` (e.g. `*.lock`) match the basename anywhere
+  in the tree, gitignore-style. A pattern containing `/` (e.g. `vendor/*`) stays
+  scoped to that exact relative path.

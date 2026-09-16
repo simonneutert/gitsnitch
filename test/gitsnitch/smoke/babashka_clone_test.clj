@@ -25,7 +25,7 @@
    (let [{:keys [exit out]} (fx/run-gitsnitch *repo-dir* "churn" "--format" "json" "--top" "5")
          data (json/parse-string out true)]
      (is (zero? exit))
-     (is (<= 0 (count (:rows data))))
+     (is (<= 0 (count (:rows data)) 5) "--top 5 should now cap json rows too")
      (is (every? #(and (string? (:path %))
                        (integer? (:changes %))
                        (>= (:changes %) 0))
