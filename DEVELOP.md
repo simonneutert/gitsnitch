@@ -12,6 +12,14 @@ bb bugs
 bb danger
 ```
 
+## Formatting
+
+```sh
+bb fmt
+```
+
+Runs `cljfmt fix` over `src`, `test`, `bb.edn`, and `deps.edn`.
+
 ## Tests
 
 The test suite has two layers:
@@ -64,12 +72,3 @@ current working directory. So `test/gitsnitch/integration/` and
 `test/gitsnitch/smoke/` invoke `bb -m gitsnitch.main <args>` as a real
 subprocess with its working directory set to the target repo
 (`gitsnitch.fixtures/run-gitsnitch`), rather than calling `-main` in-process.
-
-### A couple of behaviors worth knowing before writing new tests
-
-- `--top` is applied consistently across every output format — `table`, `json`,
-  and `edn` all show the same row cap for every command that supports it
-  (`activity`'s rows are time buckets, not a ranked list, so it's exempt).
-- `--exclude` patterns with no `/` (e.g. `*.lock`) match the basename anywhere
-  in the tree, gitignore-style. A pattern containing `/` (e.g. `vendor/*`) stays
-  scoped to that exact relative path.
