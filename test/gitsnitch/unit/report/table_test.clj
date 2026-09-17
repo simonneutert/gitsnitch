@@ -41,6 +41,29 @@
     (is (re-find #"2024-01" out))
     (is (re-find #"█" out))))
 
+(deftest mailmap-suggestions-table-renders-cluster-and-paste-block
+  (let [clusters [{:canonical {:name "Simon Neutert" :email "simonneutert@users.noreply.github.com" :commits 84}
+                   :aliases [{:name "Simon" :email "simon.neutert@gmail.com" :commits 30 :last-seen "2019-01-01"}]
+                   :mailmap-lines ["Simon Neutert <simonneutert@users.noreply.github.com> Simon <simon.neutert@gmail.com>"]}]
+        out (table/mailmap-suggestions-table clusters)]
+    (is (re-find #"Simon Neutert" out))
+    (is (re-find #"simon\.neutert@gmail\.com" out))
+    (is (re-find #"paste into \.mailmap" out))))
+
+(deftest mailmap-suggestions-table-pluralizes-commit-counts
+  (let [clusters [{:canonical {:name "Solo" :email "solo@x.com" :commits 1}
+                   :aliases [{:name "Solo" :email "solo@old.com" :commits 1 :last-seen "2019-01-01"}]
+                   :mailmap-lines ["Solo <solo@x.com> <solo@old.com>"]}]
+        out (table/mailmap-suggestions-table clusters)]
+    (is (re-find #"1 likely-duplicate identity found" out))
+    (is (re-find #"\(1 commit\)" out))
+    (is (re-find #"\(1 commit,\s" out))
+    (is (not (re-find #"1 commits" out)))))
+
+(deftest mailmap-suggestions-table-handles-no-clusters
+  (let [out (table/mailmap-suggestions-table [])]
+    (is (re-find #"No likely duplicates found" out))))
+
 (deftest danger-table-handles-empty-sections
   (testing "no crash when all sections are empty"
     (let [out (table/danger-table {:total-commits 0 :danger-commits 0

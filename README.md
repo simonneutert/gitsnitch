@@ -87,6 +87,30 @@ concentrated.
 gitsnitch authors --since 1.year.ago
 ```
 
+Author identity honors the repo's
+[`.mailmap`](https://git-scm.com/docs/gitmailmap) file, if one exists — commits
+made under different names/emails for the same person are counted as one author,
+the same aliases-collapse-to-one-identity behavior GitHub's contributor graph
+does at the account level. Without a `.mailmap`, each distinct name/email pair
+is its own author, which tends to fragment long-lived repos where a
+contributor's git config changed over time (new machine, new email, a typo).
+
+To find likely-duplicate identities and generate `.mailmap` entries for them:
+
+```sh
+gitsnitch authors --suggest-mailmap
+```
+
+This clusters authors whose name or email-username look like the same person and
+prints ready-to-paste `.mailmap` lines. It's a heuristic (matches on normalized
+name or email local-part) — review the suggestions before committing them to
+`.mailmap`, since a shared local part (e.g. `info@`) can coincidentally match
+unrelated people.
+
+| Flag                | Description                                                |
+| ------------------- | ---------------------------------------------------------- |
+| `--suggest-mailmap` | Suggest `.mailmap` entries for likely-duplicate identities |
+
 ### `activity`
 
 Commit counts bucketed by time period.

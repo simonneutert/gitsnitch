@@ -46,7 +46,9 @@
                 :default 10}}))
 
 (def authors-spec
-  (merge global-spec {}))
+  (merge global-spec
+         {:suggest-mailmap {:desc "Suggest .mailmap entries for likely-duplicate identities"
+                            :coerce :boolean}}))
 
 (def activity-spec
   (merge global-spec

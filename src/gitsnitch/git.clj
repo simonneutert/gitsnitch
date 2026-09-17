@@ -11,6 +11,24 @@
     (when (zero? (:exit result))
       (str/trim (:out result)))))
 
+(defn- git-config-set?
+  "Whether `git config <key>` resolves to a non-blank value, without
+   throwing when the key is simply unset (a normal outcome here, unlike
+   run-git's failures elsewhere)."
+  [key]
+  (let [result (p/shell {:out :string :err :string :continue true} "git" "config" key)]
+    (and (zero? (:exit result)) (not (str/blank? (:out result))))))
+
+(defn mailmap-present?
+  "Whether a .mailmap file exists at the repo root, or a mailmap.file /
+   mailmap.blob is configured — git honors either as the effective mailmap,
+   so a root-only check would miss repos that point elsewhere."
+  []
+  (or (when-let [root (repo-root)]
+        (.exists (io/file root ".mailmap")))
+      (git-config-set? "mailmap.file")
+      (git-config-set? "mailmap.blob")))
+
 (defn- run-git
   "Run a git command, return stdout as string. Throws on failure."
   [& args]
@@ -53,8 +71,11 @@
 (def ^:private commit-format
   ;; Record-separator prefix, then fields separated by unit-separator
   ;; Hash, short hash, author name, author email, author date (ISO),
-  ;; committer name, subject, parent hashes
-  "%x1e%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%s%x1f%P")
+  ;; committer name, subject, parent hashes.
+  ;; %aN/%aE (capital) rather than %an/%ae so a repo's .mailmap, if any,
+  ;; is applied — the same aliases-collapse-to-one-identity behavior
+  ;; GitHub's contributor graph does at the account level.
+  "%x1e%H%x1f%h%x1f%aN%x1f%aE%x1f%aI%x1f%cn%x1f%s%x1f%P")
 
 (defn- build-log-args
   "Build git log arguments from opts."
