@@ -113,6 +113,39 @@
                   :footer (str (format-number (:total-commits data)) " commits · "
                                (format-number (:total-authors data)) " authors"))))
 
+;; Mailmap suggestions
+
+(defn- pluralize [n singular plural]
+  (if (= n 1) singular plural))
+
+(defn- commits-phrase [n]
+  (str (format-number n) " " (pluralize n "commit" "commits")))
+
+(defn mailmap-suggestions-table
+  "Render suggested .mailmap entries for clusters of likely-duplicate
+   identities (see gitsnitch.metrics.authors/suggest-mailmap)."
+  [clusters]
+  (let [sb (StringBuilder.)]
+    (.append sb (str "\nSuggested .mailmap entries — " (count clusters)
+                     " likely-duplicate " (pluralize (count clusters) "identity" "identities")
+                     " found\n"))
+    (if (empty? clusters)
+      (.append sb "\nNo likely duplicates found.\n")
+      (do
+        (doseq [{:keys [canonical aliases]} clusters]
+          (.append sb (str "\n" (:name canonical) " <" (:email canonical) ">  ("
+                           (commits-phrase (:commits canonical)) ")\n"))
+          (doseq [{:keys [name email commits last-seen]} aliases]
+            (.append sb (str "  ← " name " <" email ">  ("
+                             (commits-phrase commits)
+                             (when last-seen
+                               (str ", last seen " (subs (str last-seen) 0 (min 10 (count (str last-seen)))))) ")\n"))))
+        (.append sb "\n--- paste into .mailmap ---\n")
+        (doseq [{:keys [mailmap-lines]} clusters
+                line mailmap-lines]
+          (.append sb (str line "\n")))))
+    (str sb)))
+
 ;; Activity table
 
 (defn activity-table [data {:keys [trend]}]

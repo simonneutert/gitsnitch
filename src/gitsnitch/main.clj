@@ -1,5 +1,6 @@
 (ns gitsnitch.main
   (:require [gitsnitch.cli :as cli]
+            [gitsnitch.filters :as filters]
             [gitsnitch.git :as git]
             [gitsnitch.progress :as progress]
             [gitsnitch.metrics.churn :as churn]
@@ -79,17 +80,48 @@
                                    (print (table/dir-churn-table data opts))
                                    (print (table/churn-table data (assoc opts :detailed? detailed?)))))})))
 
-(defn- run-authors [ctx]
-  (run-report ctx
-              {:command      "authors"
-               :compute-fn   authors/author-stats
-               :extra-fn     (fn [data]
-                               {:warnings (authors/concentration-warnings (:rows data) (:total-commits data))})
-               :cap-rows?    true
-               :render-table (fn [data extra opts]
-                               (print (table/authors-table data opts))
-                               (doseq [w (:warnings extra)]
-                                 (println (str "⚠ " (:message w)))))}))
+(defn- mailmap-hint
+  "A one-line nudge toward `authors --suggest-mailmap`, or nil when it
+   doesn't apply: only one author (nothing to consolidate), or a .mailmap
+   already exists (the repo owner has presumably already curated it)."
+  [total-authors]
+  (when (and (> total-authors 1) (not (git/mailmap-present?)))
+    "💡 No .mailmap found — if some of these are the same person under different names/emails, run `gitsnitch authors --suggest-mailmap` to find likely duplicates."))
+
+(defn- run-authors-suggest-mailmap
+  "Stream commits, cluster likely-duplicate identities, and print suggested
+   .mailmap entries instead of the usual ranked table."
+  [{:keys [opts]}]
+  (try
+    (let [commits  (with-progress (git/stream-commits opts) opts)
+          filtered (filters/filter-commits-by-path commits (:path opts))
+          acc      (reduce authors/accumulate-step (authors/init-acc) filtered)
+          clusters (authors/suggest-mailmap (:authors acc))
+          fmt      (or (:format opts) "table")]
+      (case fmt
+        "json" (json/print-json {:command "authors" :suggest-mailmap true :clusters clusters})
+        "edn"  (prn {:command :authors :suggest-mailmap true :clusters clusters})
+        (print (table/mailmap-suggestions-table clusters))))
+    (finally
+      (when (show-progress? opts) (progress/finish-progress!)))))
+
+(defn- run-authors [{:keys [opts] :as ctx}]
+  (if (:suggest-mailmap opts)
+    (run-authors-suggest-mailmap ctx)
+    (run-report ctx
+                {:command      "authors"
+                 :compute-fn   authors/author-stats
+                 :extra-fn     (fn [data]
+                                 (let [hint (mailmap-hint (:total-authors data))]
+                                   (cond-> {:warnings (authors/concentration-warnings (:rows data) (:total-commits data))}
+                                     hint (assoc :mailmap-hint hint))))
+                 :cap-rows?    true
+                 :render-table (fn [data extra opts]
+                                 (print (table/authors-table data opts))
+                                 (doseq [w (:warnings extra)]
+                                   (println (str "⚠ " (:message w))))
+                                 (when-let [hint (:mailmap-hint extra)]
+                                   (println (str "\n" hint))))})))
 
 (defn- run-activity [ctx]
   (run-report ctx
@@ -126,18 +158,20 @@
           act-data    (activity/finalize-activity (:activity-acc result))
           warnings    (authors/concentration-warnings (:rows author-data)
                                                       (:total-commits author-data))
+          hint        (mailmap-hint (:total-authors author-data))
           merge-ratio (if (pos? total)
                         (Double/parseDouble (format "%.1f" (* 100.0 (/ merges total))))
                         0.0)
-          out         {:command         "summary"
-                       :total-commits   total
-                       :merge-commits   merges
-                       :merge-ratio     merge-ratio
-                       :total-authors   (:total-authors author-data)
-                       :top-churn       (take top-n (:rows churn-data))
-                       :top-authors     (take top-n (:rows author-data))
-                       :recent-activity (take-last 12 (:rows act-data))
-                       :warnings        warnings}
+          out         (cond-> {:command         "summary"
+                               :total-commits   total
+                               :merge-commits   merges
+                               :merge-ratio     merge-ratio
+                               :total-authors   (:total-authors author-data)
+                               :top-churn       (take top-n (:rows churn-data))
+                               :top-authors     (take top-n (:rows author-data))
+                               :recent-activity (take-last 12 (:rows act-data))
+                               :warnings        warnings}
+                        hint (assoc :mailmap-hint hint))
           fmt         (or (:format opts) "table")]
       (case fmt
         "json" (json/print-json out)
@@ -161,6 +195,8 @@
                                     {:top top-n}))
           (println)
           (print (table/authors-table author-data {:top top-n}))
+          (when hint
+            (println (str "\n" hint)))
           (println))))
     (finally
       (when (show-progress? opts) (progress/finish-progress!)))))
